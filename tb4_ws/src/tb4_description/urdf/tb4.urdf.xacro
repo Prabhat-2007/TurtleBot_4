@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<robot name="turtlebot4" xmlns:xacro="http://ros.org/wiki/xacro">
+  <!-- Arguments (all optional) -->
+  <xacro:arg name="namespace"        default=""/>
+  <xacro:arg name="lidar_samples"    default="720"/>
+  <xacro:arg name="lidar_rate"       default="10"/>
+  <xacro:arg name="lidar_visualize"  default="false"/>
+  <xacro:arg name="stereo_width"     default="640"/>
+  <xacro:arg name="stereo_height"    default="400"/>
+  <xacro:arg name="stereo_fps"       default="30"/>
+
+  <xacro:property name="ns"              value="$(arg namespace)"/>
+  <xacro:property name="tp"              value="${('/' + ns) if ns else ''}"/>
+  <xacro:property name="lidar_samples"   value="$(arg lidar_samples)"/>
+  <xacro:property name="lidar_rate"      value="$(arg lidar_rate)"/>
+  <xacro:property name="lidar_visualize" value="$(arg lidar_visualize)"/>
+  <xacro:property name="stereo_width"    value="$(arg stereo_width)"/>
+  <xacro:property name="stereo_height"   value="$(arg stereo_height)"/>
+  <xacro:property name="stereo_fps"      value="$(arg stereo_fps)"/>
+
+  <xacro:include filename="common.xacro"/>
+  <xacro:include filename="base.xacro"/>
+  <xacro:include filename="tower.xacro"/>
+  <xacro:include filename="sensors.xacro"/>
+  <xacro:include filename="gazebo.xacro"/>
+
+  <!-- Sensors (same mounting as the stock TurtleBot 4) -->
+  <xacro:rplidar name="rplidar" parent_link="shell_link">
+    <origin xyz="${-4*cm2m} 0 ${9.8715*cm2m}" rpy="0 0 ${pi/2}"/>
+  </xacro:rplidar>
+
+  <xacro:oakd_stereo name="oakd" parent_link="oakd_camera_bracket">
+    <origin xyz="${5.84*cm2m} 0 ${9.676*cm2m}"/>
+  </xacro:oakd_stereo>
+</robot>

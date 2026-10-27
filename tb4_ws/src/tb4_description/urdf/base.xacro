@@ -1,0 +1,134 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  <!-- iRobot Create 3 base reduced to what is needed for driving:
+       body, bumper (as a rigid part of the body), two drive wheels, front caster, IMU.
+       Cliff / IR / optical-mouse / wheel-drop / button simulation has been removed on purpose. -->
+
+  <xacro:property name="body_z_offset"           value="${-2.5*cm2m}" />
+  <xacro:property name="body_collision_z_offset" value="${1*cm2m}" />
+  <xacro:property name="body_mass"               value="2.300" />
+  <xacro:property name="body_radius"             value="${16.4*cm2m}" />
+  <xacro:property name="body_length"             value="${6*cm2m}" />
+  <xacro:property name="body_cog_x_offset"       value="${2.28*cm2m}" />
+  <xacro:property name="base_link_z_offset"      value="${6.42*cm2m}"/>
+
+  <xacro:property name="bumper_z_offset"         value="${-2.5*cm2m}" />
+  <xacro:property name="bumper_mass"             value="0.1" />
+
+  <xacro:property name="wheel_radius"            value="${3.575*cm2m}" />
+  <xacro:property name="wheel_width"             value="${1.5*cm2m}" />
+  <xacro:property name="wheel_mass"              value="0.2" />
+  <xacro:property name="wheel_separation"        value="${23.3*cm2m}" />
+
+  <xacro:property name="caster_radius"           value="${1*cm2m}" />
+  <xacro:property name="caster_x"                value="${12.5*cm2m}" />
+
+  <!-- base_link sits on the ground plane (z = 0) -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 ${body_z_offset + base_link_z_offset}" rpy="0 0 ${pi/2}"/>
+      <geometry>
+        <mesh filename="package://tb4_description/meshes/body_visual.dae" />
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="0 0 ${bumper_z_offset + base_link_z_offset}"/>
+      <geometry>
+        <mesh filename="package://tb4_description/meshes/bumper_visual.dae" />
+      </geometry>
+    </visual>
+    <collision name="create3_base_collision">
+      <origin xyz="0 0 ${body_z_offset + body_collision_z_offset + base_link_z_offset}" rpy="0 0 ${pi/2}"/>
+      <geometry>
+        <cylinder length="${body_length}" radius="${body_radius}"/>
+      </geometry>
+    </collision>
+    <collision name="create3_bumper_collision">
+      <origin xyz="0 0 ${bumper_z_offset + base_link_z_offset}"/>
+      <geometry>
+        <mesh filename="package://tb4_description/meshes/bumper_collision.dae" />
+      </geometry>
+    </collision>
+    <xacro:inertial_cylinder_with_pose mass="${body_mass + bumper_mass}" radius="${body_radius}" length="${body_length}">
+      <origin xyz="${body_cog_x_offset} 0 ${body_collision_z_offset + base_link_z_offset}"/>
+    </xacro:inertial_cylinder_with_pose>
+  </link>
+
+  <gazebo reference="base_link">
+    <xacro:material_darkgray/>
+  </gazebo>
+
+  <!-- Drive wheels: continuous joints, positive rotation = forward -->
+  <xacro:macro name="drive_wheel" params="name side">
+    <joint name="${name}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${name}_wheel"/>
+      <origin xyz="0 ${side * wheel_separation / 2} ${wheel_radius}" rpy="${-pi/2} 0 0"/>
+      <axis xyz="0 0 1"/>
+    </joint>
+    <link name="${name}_wheel">
+      <visual>
+        <geometry><cylinder length="${wheel_width}" radius="${wheel_radius}"/></geometry>
+        <material name="wheel_black"><color rgba="0.1 0.1 0.1 1"/></material>
+      </visual>
+      <collision>
+        <geometry><cylinder length="${wheel_width}" radius="${wheel_radius}"/></geometry>
+      </collision>
+      <xacro:inertial_cylinder mass="${wheel_mass}" radius="${wheel_radius}" length="${wheel_width}"/>
+    </link>
+    <gazebo reference="${name}_wheel">
+      <mu1>1.0</mu1>
+      <mu2>1.0</mu2>
+      <kp>1000000.0</kp>
+      <kd>100.0</kd>
+      <minDepth>0.0001</minDepth>
+      <maxVel>1.0</maxVel>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:drive_wheel name="left"  side="1"/>
+  <xacro:drive_wheel name="right" side="-1"/>
+
+  <!-- Frictionless front caster so the robot rests level on the ground -->
+  <joint name="front_caster_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="front_caster_link"/>
+    <origin xyz="${caster_x} 0 ${caster_radius}" rpy="${-pi/2} 0 0"/>
+  </joint>
+  <link name="front_caster_link">
+    <visual>
+      <geometry><sphere radius="${caster_radius}"/></geometry>
+      <material name="caster_black"><color rgba="0.1 0.1 0.1 1"/></material>
+    </visual>
+    <collision>
+      <geometry><sphere radius="${caster_radius}"/></geometry>
+    </collision>
+    <xacro:inertial_sphere mass="0.01" radius="${caster_radius}"/>
+  </link>
+  <gazebo reference="front_caster_link">
+    <mu1>0.0</mu1>
+    <mu2>0.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>1.0</kd>
+  </gazebo>
+  <xacro:keep_joint name="front_caster_joint"/>
+
+  <!-- IMU -->
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0.050613 0.043673 ${0.0202 + base_link_z_offset}"/>
+  </joint>
+  <link name="imu_link">
+    <xacro:inertial_dummy/>
+  </link>
+  <xacro:keep_joint name="imu_joint"/>
+
+  <!-- Base footprint used by navigation -->
+  <link name="base_footprint"/>
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="base_footprint"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+</robot>

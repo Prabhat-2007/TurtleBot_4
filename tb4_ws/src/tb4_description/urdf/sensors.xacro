@@ -1,0 +1,137 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  <!-- RPLIDAR A1 and OAK-D Pro (stereo pair) with Gazebo Harmonic sensors.
+       All Gazebo topics are prefixed with the tp property (empty, or "/<namespace>"). -->
+
+  <!-- ===================== RPLIDAR ===================== -->
+  <xacro:macro name="rplidar" params="name parent_link *origin">
+    <joint name="${name}_joint" type="fixed">
+      <parent link="${parent_link}"/>
+      <child link="${name}_link"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+    <link name="${name}_link">
+      <visual>
+        <geometry><mesh filename="package://tb4_description/meshes/rplidar.dae" scale="1 1 1" /></geometry>
+      </visual>
+      <collision>
+        <origin xyz="0 ${1.3*cm2m} ${-1.9*cm2m}"/>
+        <geometry><box size="${7.1*cm2m} ${10*cm2m} ${6*cm2m}"/></geometry>
+      </collision>
+      <xacro:inertial_cuboid mass="0.17" x="${7.1*cm2m}" y="${10*cm2m}" z="${6*cm2m}"/>
+    </link>
+    <xacro:keep_joint name="${name}_joint"/>
+
+    <gazebo reference="${name}_link">
+      <sensor name="${name}" type="gpu_lidar">
+        <gz_frame_id>${name}_link</gz_frame_id>
+        <topic>${tp}/scan</topic>
+        <update_rate>${lidar_rate}</update_rate>
+        <always_on>true</always_on>
+        <visualize>${lidar_visualize}</visualize>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>${lidar_samples}</samples>
+              <resolution>1</resolution>
+              <min_angle>${-pi}</min_angle>
+              <max_angle>${pi}</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.164</min>
+            <max>12.0</max>
+            <resolution>0.01</resolution>
+          </range>
+        </lidar>
+      </sensor>
+      <xacro:material_darkgray/>
+    </gazebo>
+  </xacro:macro>
+
+  <!-- ===================== OAK-D stereo ===================== -->
+  <xacro:macro name="oakd_stereo" params="name parent_link *origin">
+    <xacro:property name="base_frame" value="${name}_link"/>
+    <xacro:property name="baseline"   value="0.075"/>
+    <xacro:property name="hfov"       value="${80*deg2rad}"/>
+    <xacro:property name="fx"         value="${(stereo_width/2.0)/tan(hfov/2.0)}"/>
+    <xacro:property name="cx"         value="${stereo_width/2.0}"/>
+    <xacro:property name="cy"         value="${stereo_height/2.0}"/>
+
+    <joint name="${name}_joint" type="fixed">
+      <parent link="${parent_link}"/>
+      <child link="${base_frame}"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+    <link name="${base_frame}">
+      <visual>
+        <geometry><mesh filename="package://tb4_description/meshes/oakd_pro.dae" scale="1 1 1" /></geometry>
+      </visual>
+      <collision>
+        <origin xyz="${-1.1*cm2m} 0 ${-0.5*cm2m}"/>
+        <geometry><box size="${2.25*cm2m} ${9.7*cm2m} ${3*cm2m}"/></geometry>
+      </collision>
+      <inertial>
+        <mass value="0.061"/>
+        <inertia ixx="0.00000202475" ixy="0.0" ixz="0.0"
+                 iyy="0.00001527320" iyz="0.0" izz="0.00001605536" />
+      </inertial>
+    </link>
+    <gazebo reference="${base_frame}"><xacro:material_darkgray/></gazebo>
+    <xacro:keep_joint name="${name}_joint"/>
+
+    <!-- One camera of the stereo pair. side: +1 left, -1 right -->
+    <xacro:macro name="stereo_eye" params="eye side">
+      <joint name="${name}_${eye}_camera_joint" type="fixed">
+        <parent link="${base_frame}"/>
+        <child link="${name}_${eye}_camera_frame"/>
+        <origin xyz="0 ${side * baseline / 2} 0" rpy="0 0 0"/>
+      </joint>
+      <link name="${name}_${eye}_camera_frame"><xacro:inertial_dummy/></link>
+
+      <joint name="${name}_${eye}_camera_optical_joint" type="fixed">
+        <parent link="${name}_${eye}_camera_frame"/>
+        <child link="${name}_${eye}_camera_optical_frame"/>
+        <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+      </joint>
+      <link name="${name}_${eye}_camera_optical_frame"><xacro:inertial_dummy/></link>
+
+      <xacro:keep_joint name="${name}_${eye}_camera_joint"/>
+      <xacro:keep_joint name="${name}_${eye}_camera_optical_joint"/>
+
+      <gazebo reference="${name}_${eye}_camera_frame">
+        <sensor name="${eye}" type="camera">
+          <gz_frame_id>${name}_${eye}_camera_optical_frame</gz_frame_id>
+          <topic>${tp}/stereo/${eye}/image_raw</topic>
+          <update_rate>${stereo_fps}</update_rate>
+          <always_on>true</always_on>
+          <visualize>false</visualize>
+          <camera name="${eye}">
+            <camera_info_topic>${tp}/stereo/${eye}/camera_info</camera_info_topic>
+            <optical_frame_id>${name}_${eye}_camera_optical_frame</optical_frame_id>
+            <horizontal_fov>${hfov}</horizontal_fov>
+            <image>
+              <width>${stereo_width}</width>
+              <height>${stereo_height}</height>
+              <format>R8G8B8</format>
+            </image>
+            <clip><near>0.2</near><far>20.0</far></clip>
+            <lens>
+              <intrinsics>
+                <fx>${fx}</fx><fy>${fx}</fy><cx>${cx}</cx><cy>${cy}</cy><s>0</s>
+              </intrinsics>
+              <!-- Projection matrix: right camera carries Tx = -fx * baseline (needed by stereo_image_proc) -->
+              <projection>
+                <p_fx>${fx}</p_fx><p_fy>${fx}</p_fy><p_cx>${cx}</p_cx><p_cy>${cy}</p_cy>
+                <tx>${0.0 if side == 1 else -fx * baseline}</tx><ty>0</ty>
+              </projection>
+            </lens>
+          </camera>
+        </sensor>
+      </gazebo>
+    </xacro:macro>
+
+    <xacro:stereo_eye eye="left"  side="1"/>
+    <xacro:stereo_eye eye="right" side="-1"/>
+  </xacro:macro>
+</robot>
